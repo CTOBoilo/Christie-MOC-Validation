@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-magenta-400: #ff00ff;
+  --color-green-400: #00ff00;
+}
+
+@layer utilities {
+  .bias-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .bias-slider::-webkit-slider-runnable-track {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #ff00ff 0%, #808080 50%, #00ff00 100%);
+  }
+
+  .bias-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -5px; /* Centers thumb on the 10px track */
+    background-color: #ffffff;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  .bias-slider:focus {
+    outline: none;
+  }
+
+  /* Firefox */
+  .bias-slider::-moz-range-track {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #ff00ff 0%, #808080 50%, #00ff00 100%);
+  }
+
+  .bias-slider::-moz-range-thumb {
+    background-color: #ffffff;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+}
