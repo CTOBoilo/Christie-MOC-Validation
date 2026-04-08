@@ -276,8 +276,8 @@ export default function App() {
       '# Christie MOC Validation Survey - Aggregated Results',
       `# Export Date: ${new Date().toLocaleString()}`,
       '# Legend:',
-      '# Match Accuracy: 1 (Fail) to 7 (Perfect)',
-      '# Chromatic Bias: -3 (Strong Magenta) | 0 (Neutral) | +3 (Strong Green)',
+      '# Match Accuracy: Fail | Acceptable | Perfect',
+      '# Chromatic Bias: -2 (A lot Magenta) | -1 (A little Magenta) | 0 (Neutral) | +1 (A little Green) | +2 (A lot Green)',
       '# Perceptual Artifacts: Yes/No (Loss of luminance or saturation volume)',
       '',
       headers.join(','),
@@ -297,7 +297,7 @@ export default function App() {
 
   const isCurrentStepComplete = useMemo(() => {
     if (currentPhase === 'intro') {
-      return surveyData.gender !== '' && surveyData.age !== '';
+      return surveyData.age !== '';
     }
     if (currentPhase === 'thankyou') {
       return true;
@@ -310,7 +310,7 @@ export default function App() {
         (currentFrame.corrected.matchAccuracy === 'Perfect' || currentFrame.corrected.perceptualArtifacts !== null)
       );
     }
-  }, [currentFrame, currentPhase, surveyData.gender, surveyData.age]);
+  }, [currentFrame, currentPhase, surveyData.age]);
 
   const totalSteps = (TOTAL_FRAMES * 2) + 2;
   const currentStep = currentPhase === 'intro' 
