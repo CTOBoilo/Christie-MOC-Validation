@@ -2,8 +2,6 @@
 
 A React-based web application designed to collect and aggregate observer data for Christie MOC validation. The application guides observers through a structured evaluation process, capturing their perceptual feedback on baseline and corrected image frames.
 
-https://christie-moc-validation.vercel.app/
-
 ## Features
 
 - **Observer Tracking**: Automatically generates sequential observer IDs (e.g., OBS-001) and tracks demographic data (Age, Gender).

@@ -17,12 +17,13 @@ import {
   Image as ImageIcon,
   Database,
   ArrowLeft,
-  Trash2
+  Trash2,
+  Menu
 } from 'lucide-react';
 
 // Types
-type CMOSScore = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-type BiasScore = -3 | -2 | -1 | 0 | 1 | 2 | 3;
+type CMOSScore = 'Fail' | 'Acceptable' | 'Perfect';
+type BiasScore = -2 | -1 | 0 | 1 | 2;
 
 interface FrameData {
   baseline: {
@@ -40,6 +41,7 @@ interface SurveyState {
   observerId: string;
   gender: string;
   age: string;
+  startTime?: string;
   frames: FrameData[];
 }
 
@@ -47,6 +49,7 @@ interface AggregatedResult {
   observerId: string;
   gender: string;
   age: string;
+  startTime?: string;
   frameResults: FrameData[];
   status: 'Complete' | 'Skipped' | 'In Progress';
 }
@@ -77,7 +80,7 @@ const getNextObserverId = (resetAll = false) => {
 };
 
 export default function App() {
-  const [currentPhase, setCurrentPhase] = useState<'intro' | 'baseline' | 'corrected' | 'results'>(() => {
+  const [currentPhase, setCurrentPhase] = useState<'intro' | 'baseline' | 'corrected' | 'results' | 'thankyou'>(() => {
     return (localStorage.getItem('current_phase') as any) || 'intro';
   });
   const [currentFrameIndex, setCurrentFrameIndex] = useState(() => {
@@ -94,6 +97,7 @@ export default function App() {
       observerId: `OBS-${String(counter || '1').padStart(3, '0')}`,
       gender: '',
       age: '',
+      startTime: undefined,
       frames: Array(TOTAL_FRAMES).fill(null).map(() => ({ ...JSON.parse(JSON.stringify(INITIAL_FRAME_DATA)) })),
     };
   });
@@ -105,9 +109,10 @@ export default function App() {
     localStorage.setItem('current_frame_index', String(currentFrameIndex));
   }, [surveyData, currentPhase, currentFrameIndex]);
   const [showResetModal, setShowResetModal] = useState<{show: boolean, full: boolean}>({show: false, full: false});
-  const [showPasswordModal, setShowPasswordModal] = useState<{show: boolean, target: 'export' | 'results'}>({show: false, target: 'results'});
+  const [showPasswordModal, setShowPasswordModal] = useState<{show: boolean, target: 'export' | 'results' | 'full_reset' | 'next_observer'}>({show: false, target: 'results'});
   const [password, setPassword] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
 
   const history: AggregatedResult[] = useMemo(() => {
     const historyJson = localStorage.getItem('survey_history') || '[]';
@@ -121,22 +126,25 @@ export default function App() {
     // Check if this observer already exists in history
     const existingIndex = history.findIndex(h => h.observerId === surveyData.observerId);
     
-    const totalSteps = (TOTAL_FRAMES * 2) + 1;
+    const totalSteps = (TOTAL_FRAMES * 2) + 2;
     const currentStep = currentPhase === 'intro' 
       ? 1 
+      : currentPhase === 'thankyou' ? totalSteps
       : (currentPhase === 'baseline' ? 2 : 7) + currentFrameIndex;
 
     const isCurrentStepComplete = 
       currentPhase === 'intro' ? (surveyData.gender !== '' && surveyData.age !== '') :
+      currentPhase === 'thankyou' ? true :
       currentPhase === 'baseline' ? (currentFrame.baseline.matchAccuracy !== null) :
-      (currentFrame.corrected.matchAccuracy !== null && (currentFrame.corrected.matchAccuracy === 7 || currentFrame.corrected.perceptualArtifacts !== null));
+      (currentFrame.corrected.matchAccuracy !== null && (currentFrame.corrected.matchAccuracy === 'Perfect' || currentFrame.corrected.perceptualArtifacts !== null));
 
-    const isTechnicallyDone = currentStep >= totalSteps && isCurrentStepComplete;
+    const isTechnicallyDone = currentStep >= totalSteps - 1 && isCurrentStepComplete;
 
     const newEntry: AggregatedResult = {
       observerId: surveyData.observerId,
       gender: surveyData.gender,
       age: surveyData.age,
+      startTime: surveyData.startTime,
       frameResults: surveyData.frames,
       status: forcedStatus || (isTechnicallyDone ? 'Complete' : 'Skipped')
     };
@@ -166,8 +174,8 @@ export default function App() {
   const updateSection = (section: 'baseline' | 'corrected', updates: any) => {
     const sectionData = { ...currentFrame[section], ...updates };
     
-    // If corrected match is perfect (7), reset perceptual artifacts
-    if (section === 'corrected' && updates.matchAccuracy === 7) {
+    // If corrected match is perfect, reset perceptual artifacts
+    if (section === 'corrected' && updates.matchAccuracy === 'Perfect') {
       sectionData.perceptualArtifacts = null;
     }
     
@@ -187,6 +195,7 @@ export default function App() {
         observerId: 'OBS-001',
         gender: '',
         age: '',
+        startTime: undefined,
         frames: Array(TOTAL_FRAMES).fill(null).map(() => ({ ...JSON.parse(JSON.stringify(INITIAL_FRAME_DATA)) })),
       });
     } else {
@@ -201,6 +210,7 @@ export default function App() {
         observerId: newId,
         gender: '',
         age: '',
+        startTime: undefined,
         frames: Array(TOTAL_FRAMES).fill(null).map(() => ({ ...JSON.parse(JSON.stringify(INITIAL_FRAME_DATA)) })),
       });
     }
@@ -227,6 +237,7 @@ export default function App() {
         observerId: surveyData.observerId,
         gender: surveyData.gender,
         age: surveyData.age,
+        startTime: surveyData.startTime,
         frameResults: surveyData.frames,
         status: isComplete ? 'Complete' : 'Skipped'
       });
@@ -239,6 +250,7 @@ export default function App() {
 
     const headers = [
       'Observer ID',
+      'Start Time',
       'Status',
       'Gender',
       'Age',
@@ -255,6 +267,7 @@ export default function App() {
       session.frameResults.forEach((frame, index) => {
         rows.push([
           session.observerId,
+          session.startTime ? `"${new Date(session.startTime).toLocaleString()}"` : 'N/A',
           session.status || 'In Progress',
           session.gender,
           session.age,
@@ -295,23 +308,31 @@ export default function App() {
     if (currentPhase === 'intro') {
       return surveyData.gender !== '' && surveyData.age !== '';
     }
+    if (currentPhase === 'thankyou') {
+      return true;
+    }
     if (currentPhase === 'baseline') {
       return currentFrame.baseline.matchAccuracy !== null;
     } else {
       return (
         currentFrame.corrected.matchAccuracy !== null &&
-        (currentFrame.corrected.matchAccuracy === 7 || currentFrame.corrected.perceptualArtifacts !== null)
+        (currentFrame.corrected.matchAccuracy === 'Perfect' || currentFrame.corrected.perceptualArtifacts !== null)
       );
     }
   }, [currentFrame, currentPhase, surveyData.gender, surveyData.age]);
 
-  const totalSteps = (TOTAL_FRAMES * 2) + 1;
+  const totalSteps = (TOTAL_FRAMES * 2) + 2;
   const currentStep = currentPhase === 'intro' 
     ? 1 
+    : currentPhase === 'thankyou' ? totalSteps
     : (currentPhase === 'baseline' ? 2 : 7) + currentFrameIndex;
 
   const handleNext = () => {
     if (currentPhase === 'intro') {
+      setSurveyData(prev => ({
+        ...prev,
+        startTime: prev.startTime || new Date().toISOString()
+      }));
       setCurrentPhase('baseline');
     } else if (currentPhase === 'baseline') {
       if (currentFrameIndex < TOTAL_FRAMES - 1) {
@@ -320,9 +341,11 @@ export default function App() {
         setCurrentPhase('corrected');
         setCurrentFrameIndex(0);
       }
-    } else {
+    } else if (currentPhase === 'corrected') {
       if (currentFrameIndex < TOTAL_FRAMES - 1) {
         setCurrentFrameIndex(prev => prev + 1);
+      } else {
+        setCurrentPhase('thankyou');
       }
     }
   };
@@ -338,43 +361,75 @@ export default function App() {
     }
   };
 
+  const handlePasswordSuccess = () => {
+    if (password === 'christie') {
+      setIsUnlocked(true);
+      if (showPasswordModal.target === 'results') {
+        setCurrentPhase('results');
+      } else if (showPasswordModal.target === 'full_reset') {
+        setShowResetModal({show: true, full: true});
+      } else if (showPasswordModal.target === 'next_observer') {
+        handleReset(false);
+      }
+      setShowPasswordModal({show: false, target: 'results'});
+      setPassword('');
+    } else {
+      alert('Incorrect password');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#222222] text-gray-200 font-sans selection:bg-blue-500/30">
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#1a1a1a] p-4 sticky top-0 z-10 shadow-lg">
-        <div className="max-w-3xl mx-auto flex justify-between items-center">
+        <div className="max-w-3xl mx-auto flex items-center gap-6">
+          {/* Admin Menu */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowAdminMenu(!showAdminMenu)}
+              className="p-2 rounded-lg hover:bg-gray-800 transition-colors text-gray-400 hover:text-white flex items-center gap-2"
+            >
+              <Menu size={20} />
+              <span className="text-xs font-bold uppercase tracking-wider">Admin</span>
+            </button>
+            
+            {showAdminMenu && (
+              <div className="absolute top-full left-0 mt-2 w-48 bg-[#2a2a2a] border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                <button 
+                  onClick={() => {
+                    setShowAdminMenu(false);
+                    if (isUnlocked) setCurrentPhase('results');
+                    else setShowPasswordModal({show: true, target: 'results'});
+                  }}
+                  className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                >
+                  <Database size={16} /> Results
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowAdminMenu(false);
+                    setShowResetModal({show: true, full: false});
+                  }}
+                  className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                >
+                  <RotateCcw size={16} /> New Observer
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowAdminMenu(false);
+                    setShowPasswordModal({show: true, target: 'full_reset'});
+                  }}
+                  className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-900/20 hover:text-red-300 flex items-center gap-2 border-t border-gray-700"
+                >
+                  <AlertCircle size={16} /> Full Reset
+                </button>
+              </div>
+            )}
+          </div>
+
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white">Christie MOC Validation</h1>
             <p className="text-xs text-gray-500 uppercase tracking-widest font-mono">Observer: {surveyData.observerId}</p>
-          </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => {
-                if (isUnlocked) setCurrentPhase('results');
-                else setShowPasswordModal({show: true, target: 'results'});
-              }}
-              className={`p-2 rounded-full transition-colors flex items-center gap-2 ${currentPhase === 'results' ? 'bg-blue-600 text-white' : 'hover:bg-gray-800 text-gray-400 hover:text-white'}`}
-              title="View Results"
-            >
-              <Database size={18} />
-              <span className="text-[10px] uppercase font-bold tracking-tighter">Results</span>
-            </button>
-            <button 
-              onClick={() => setShowResetModal({show: true, full: false})}
-              className="p-2 rounded-full hover:bg-gray-800 transition-colors text-gray-400 hover:text-white flex items-center gap-2"
-              title="New Observer"
-            >
-              <RotateCcw size={18} />
-              <span className="text-[10px] uppercase font-bold tracking-tighter">New Observer</span>
-            </button>
-            <button 
-              onClick={() => setShowResetModal({show: true, full: true})}
-              className="p-2 rounded-full hover:bg-red-900/20 transition-colors text-red-500/50 hover:text-red-500 flex items-center gap-2"
-              title="Full Reset"
-            >
-              <AlertCircle size={18} />
-              <span className="text-[10px] uppercase font-bold tracking-tighter">Full Reset</span>
-            </button>
           </div>
         </div>
       </header>
@@ -508,6 +563,24 @@ export default function App() {
                   </table>
                 </div>
               </section>
+            ) : currentPhase === 'thankyou' ? (
+              /* Thank You Section */
+              <section className="bg-[#2a2a2a] rounded-2xl p-12 shadow-xl border border-gray-800 max-w-xl mx-auto text-center">
+                <div className="w-20 h-20 bg-green-600/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <CheckCircle2 size={40} />
+                </div>
+                <h2 className="text-3xl font-bold text-white mb-4">Thank You!</h2>
+                <p className="text-gray-400 mb-8">
+                  The survey for observer <span className="font-mono text-blue-400">{surveyData.observerId}</span> has been successfully completed and saved.
+                </p>
+                <button
+                  onClick={() => setShowPasswordModal({show: true, target: 'next_observer'})}
+                  className="px-8 py-4 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2 mx-auto"
+                >
+                  <RotateCcw size={20} />
+                  <span>Next Observer</span>
+                </button>
+              </section>
             ) : currentPhase === 'intro' ? (
               /* Intro Section */
               <section className="bg-[#2a2a2a] rounded-2xl p-8 shadow-xl border border-gray-800 max-w-xl mx-auto">
@@ -521,7 +594,7 @@ export default function App() {
                   <div className="space-y-4">
                     <label className="block text-xs font-medium text-gray-400 uppercase tracking-widest text-center">Gender</label>
                     <div className="flex gap-3">
-                      {['Male', 'Female', 'Non-binary', 'Prefer not to say'].map((g) => (
+                      {['Biologically male', 'Biologically female', 'Neither / Prefer not to say'].map((g) => (
                         <button
                           key={g}
                           onClick={() => setSurveyData(prev => ({ ...prev, gender: g }))}
@@ -560,11 +633,24 @@ export default function App() {
               </section>
             ) : (
               <>
-                {/* Frame Image Placeholder */}
+                {/* Frame Image */}
                 <div className="max-w-md mx-auto w-full aspect-video bg-[#1a1a1a] rounded-xl border border-gray-800 flex items-center justify-center overflow-hidden relative group shadow-lg">
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-700/50 group-hover:text-gray-500 transition-colors">
+                  <img 
+                    src={`/frames/${currentFrameIndex + 1}.jpg`} 
+                    alt={`Frame ${currentFrameIndex + 1}`} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback if image is not uploaded yet
+                      e.currentTarget.style.display = 'none';
+                      if (e.currentTarget.nextElementSibling) {
+                        (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                      }
+                    }}
+                  />
+                  <div className="absolute inset-0 flex-col items-center justify-center text-gray-700/50 group-hover:text-gray-500 transition-colors hidden">
                     <ImageIcon size={40} strokeWidth={1} />
                     <span className="mt-2 text-[10px] font-mono uppercase tracking-widest">Frame {currentFrameIndex + 1} Reference</span>
+                    <span className="mt-1 text-[9px] text-gray-600">Upload to public/frames/{currentFrameIndex + 1}.jpg</span>
                   </div>
                 </div>
 
@@ -582,25 +668,22 @@ export default function App() {
                     <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Rate the side-by-side color match:
                     </label>
-                    <div className="flex justify-between items-center gap-1">
-                      {[1, 2, 3, 4, 5, 6, 7].map((score) => (
+                    <div className="flex justify-between items-center gap-3">
+                      {(['Fail', 'Acceptable', 'Perfect'] as CMOSScore[]).map((score) => (
                         <button
                           key={score}
                           onClick={() => {
                             const updates: any = { matchAccuracy: score };
-                            if (score === 7) updates.chromaticBias = 0;
+                            if (score === 'Perfect') updates.chromaticBias = 0;
                             updateSection('baseline', updates);
                           }}
-                          className={`flex-1 py-3 rounded-lg border-2 transition-all flex flex-col items-center gap-0.5 ${
+                          className={`flex-1 py-4 rounded-lg border-2 transition-all flex flex-col items-center gap-0.5 ${
                             currentFrame.baseline.matchAccuracy === score
                               ? 'bg-blue-600/20 border-blue-500 text-white'
                               : 'bg-gray-800/50 border-transparent text-gray-500 hover:border-gray-700'
                           }`}
                         >
-                          <span className="text-base font-bold">{score}</span>
-                          <span className="text-[8px] uppercase tracking-tighter opacity-50">
-                            {score === 1 ? 'Fail' : score === 4 ? 'Accept' : score === 7 ? 'Perfect' : ''}
-                          </span>
+                          <span className="text-sm font-bold uppercase tracking-wider">{score}</span>
                         </button>
                       ))}
                     </div>
@@ -610,30 +693,33 @@ export default function App() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-end">
                       <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Characterize the perceived chromatic bias (if any):
+                        Do you notice a color tint? (Green or Magenta)
                       </label>
                       <span className={`text-base font-mono font-bold ${
                         currentFrame.baseline.chromaticBias < 0 ? 'text-magenta-400' : 
                         currentFrame.baseline.chromaticBias > 0 ? 'text-green-400' : 'text-white'
                       }`}>
-                        {currentFrame.baseline.chromaticBias > 0 ? `+${currentFrame.baseline.chromaticBias}` : currentFrame.baseline.chromaticBias}
+                        {currentFrame.baseline.chromaticBias === -2 ? 'A lot (Magenta)' : 
+                         currentFrame.baseline.chromaticBias === -1 ? 'A little (Magenta)' : 
+                         currentFrame.baseline.chromaticBias === 1 ? 'A little (Green)' : 
+                         currentFrame.baseline.chromaticBias === 2 ? 'A lot (Green)' : 'Neutral'}
                       </span>
                     </div>
-                    <div className={`px-5 py-6 bg-gray-800/40 rounded-xl border border-gray-700/30 transition-opacity ${currentFrame.baseline.matchAccuracy === 7 ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                    <div className={`px-5 py-6 bg-gray-800/40 rounded-xl border border-gray-700/30 transition-opacity ${currentFrame.baseline.matchAccuracy === 'Perfect' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
                       <div className="relative px-[10px]">
                         <input 
                           type="range" 
-                          min="-3" 
-                          max="3" 
+                          min="-2" 
+                          max="2" 
                           step="1"
-                          disabled={currentFrame.baseline.matchAccuracy === 7}
+                          disabled={currentFrame.baseline.matchAccuracy === 'Perfect'}
                           value={currentFrame.baseline.chromaticBias}
                           onChange={(e) => updateSection('baseline', { chromaticBias: parseInt(e.target.value) })}
                           className="bias-slider"
                         />
                       </div>
                       <div className="flex justify-between px-[10px] mt-5 text-xs font-mono uppercase tracking-widest text-gray-500">
-                        {[-3, -2, -1, 0, 1, 2, 3].map((val) => (
+                        {[-2, -1, 0, 1, 2].map((val) => (
                           <div 
                             key={val} 
                             className={`flex flex-col items-center w-0 transition-all ${
@@ -642,11 +728,10 @@ export default function App() {
                                 : ''
                             }`}
                           >
-                            <span className="whitespace-nowrap">{val > 0 ? `+${val}` : val}</span>
+                            <span className="whitespace-nowrap">{val === -2 || val === 2 ? 'A lot' : val === -1 || val === 1 ? 'A little' : 'Neutral'}</span>
                             <div className="h-4 flex items-center">
-                              {val === -3 && <span className="text-[8px] opacity-60">MAGENTA</span>}
-                              {val === 0 && <span className="text-[8px] opacity-60">NEUTRAL</span>}
-                              {val === 3 && <span className="text-[8px] opacity-60">GREEN</span>}
+                              {val === -2 && <span className="text-[8px] opacity-60">MAGENTA</span>}
+                              {val === 2 && <span className="text-[8px] opacity-60">GREEN</span>}
                             </div>
                           </div>
                         ))}
@@ -669,25 +754,22 @@ export default function App() {
                     <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
                       Rate the side-by-side color match:
                     </label>
-                    <div className="flex justify-between items-center gap-1">
-                      {[1, 2, 3, 4, 5, 6, 7].map((score) => (
+                    <div className="flex justify-between items-center gap-3">
+                      {(['Fail', 'Acceptable', 'Perfect'] as CMOSScore[]).map((score) => (
                         <button
                           key={score}
                           onClick={() => {
                             const updates: any = { matchAccuracy: score };
-                            if (score === 7) updates.residualBias = 0;
+                            if (score === 'Perfect') updates.residualBias = 0;
                             updateSection('corrected', updates);
                           }}
-                          className={`flex-1 py-3 rounded-lg border-2 transition-all flex flex-col items-center gap-0.5 ${
+                          className={`flex-1 py-4 rounded-lg border-2 transition-all flex flex-col items-center gap-0.5 ${
                             currentFrame.corrected.matchAccuracy === score
                               ? 'bg-blue-600/20 border-blue-500 text-white'
                               : 'bg-gray-800/50 border-transparent text-gray-500 hover:border-gray-700'
                           }`}
                         >
-                          <span className="text-base font-bold">{score}</span>
-                          <span className="text-[8px] uppercase tracking-tighter opacity-50">
-                            {score === 1 ? 'Fail' : score === 4 ? 'Accept' : score === 7 ? 'Perfect' : ''}
-                          </span>
+                          <span className="text-sm font-bold uppercase tracking-wider">{score}</span>
                         </button>
                       ))}
                     </div>
@@ -697,30 +779,33 @@ export default function App() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-end">
                       <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Characterize any residual chromatic bias:
+                        Do you notice a color tint? (Green or Magenta)
                       </label>
                       <span className={`text-base font-mono font-bold ${
                         currentFrame.corrected.residualBias < 0 ? 'text-magenta-400' : 
                         currentFrame.corrected.residualBias > 0 ? 'text-green-400' : 'text-white'
                       }`}>
-                        {currentFrame.corrected.residualBias > 0 ? `+${currentFrame.corrected.residualBias}` : currentFrame.corrected.residualBias}
+                        {currentFrame.corrected.residualBias === -2 ? 'A lot (Magenta)' : 
+                         currentFrame.corrected.residualBias === -1 ? 'A little (Magenta)' : 
+                         currentFrame.corrected.residualBias === 1 ? 'A little (Green)' : 
+                         currentFrame.corrected.residualBias === 2 ? 'A lot (Green)' : 'Neutral'}
                       </span>
                     </div>
-                    <div className={`px-5 py-6 bg-gray-800/40 rounded-xl border border-gray-700/30 transition-opacity ${currentFrame.corrected.matchAccuracy === 7 ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                    <div className={`px-5 py-6 bg-gray-800/40 rounded-xl border border-gray-700/30 transition-opacity ${currentFrame.corrected.matchAccuracy === 'Perfect' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
                       <div className="relative px-[10px]">
                         <input 
                           type="range" 
-                          min="-3" 
-                          max="3" 
+                          min="-2" 
+                          max="2" 
                           step="1"
-                          disabled={currentFrame.corrected.matchAccuracy === 7}
+                          disabled={currentFrame.corrected.matchAccuracy === 'Perfect'}
                           value={currentFrame.corrected.residualBias}
                           onChange={(e) => updateSection('corrected', { residualBias: parseInt(e.target.value) })}
                           className="bias-slider"
                         />
                       </div>
                       <div className="flex justify-between px-[10px] mt-5 text-xs font-mono uppercase tracking-widest text-gray-500">
-                        {[-3, -2, -1, 0, 1, 2, 3].map((val) => (
+                        {[-2, -1, 0, 1, 2].map((val) => (
                           <div 
                             key={val} 
                             className={`flex flex-col items-center w-0 transition-all ${
@@ -729,11 +814,10 @@ export default function App() {
                                 : ''
                             }`}
                           >
-                            <span className="whitespace-nowrap">{val > 0 ? `+${val}` : val}</span>
+                            <span className="whitespace-nowrap">{val === -2 || val === 2 ? 'A lot' : val === -1 || val === 1 ? 'A little' : 'Neutral'}</span>
                             <div className="h-4 flex items-center">
-                              {val === -3 && <span className="text-[8px] opacity-60">MAGENTA</span>}
-                              {val === 0 && <span className="text-[8px] opacity-60">NEUTRAL</span>}
-                              {val === 3 && <span className="text-[8px] opacity-60">GREEN</span>}
+                              {val === -2 && <span className="text-[8px] opacity-60">MAGENTA</span>}
+                              {val === 2 && <span className="text-[8px] opacity-60">GREEN</span>}
                             </div>
                           </div>
                         ))}
@@ -742,15 +826,15 @@ export default function App() {
                   </div>
 
                   {/* Perceptual Artifacts */}
-                  <div className={`space-y-3 transition-opacity ${currentFrame.corrected.matchAccuracy === 7 ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                  <div className={`space-y-3 transition-opacity ${currentFrame.corrected.matchAccuracy === 'Perfect' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
                     <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Any loss of luminance or saturation volume?
+                      Any loss of luminance or saturation?
                     </label>
                     <div className="flex gap-3">
                       {[true, false].map((val) => (
                         <button
                           key={val ? 'yes' : 'no'}
-                          disabled={currentFrame.corrected.matchAccuracy === 7}
+                          disabled={currentFrame.corrected.matchAccuracy === 'Perfect'}
                           onClick={() => updateSection('corrected', { perceptualArtifacts: val })}
                           className={`flex-1 py-3 rounded-lg border-2 transition-all font-bold text-sm ${
                             currentFrame.corrected.perceptualArtifacts === val
@@ -773,19 +857,19 @@ export default function App() {
       </main>
 
       {/* Footer Controls */}
-      <footer className="fixed bottom-0 left-0 right-0 p-6 bg-[#1a1a1a]/90 backdrop-blur-md border-t border-gray-800 z-10">
-        <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <button
-            disabled={currentPhase === 'intro'}
-            onClick={handlePrevious}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-800 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-700 transition-colors"
-          >
-            <ChevronLeft size={20} />
-            <span>Previous</span>
-          </button>
+      {currentPhase !== 'thankyou' && currentPhase !== 'results' && (
+        <footer className="fixed bottom-0 left-0 right-0 p-6 bg-[#1a1a1a]/90 backdrop-blur-md border-t border-gray-800 z-10">
+          <div className="max-w-3xl mx-auto flex justify-between items-center">
+            <button
+              disabled={currentPhase === 'intro'}
+              onClick={handlePrevious}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-800 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-700 transition-colors"
+            >
+              <ChevronLeft size={20} />
+              <span>Previous</span>
+            </button>
 
-          <div className="flex gap-4 items-center">
-            {currentStep < totalSteps ? (
+            <div className="flex gap-4 items-center">
               <button
                 disabled={!isCurrentStepComplete}
                 onClick={handleNext}
@@ -793,29 +877,15 @@ export default function App() {
               >
                 <span>
                   {currentPhase === 'intro' ? 'Start Survey' : 
-                   (currentPhase === 'baseline' && currentFrameIndex === 4 ? 'Start Corrected Phase' : 'Next Frame')}
+                   (currentPhase === 'baseline' && currentFrameIndex === TOTAL_FRAMES - 1 ? 'Start Corrected Phase' : 
+                   (currentPhase === 'corrected' && currentFrameIndex === TOTAL_FRAMES - 1 ? 'Submit and Save' : 'Next Frame'))}
                 </span>
                 <ChevronRight size={20} />
               </button>
-            ) : (
-              <div className="flex flex-col items-center gap-4">
-                <button
-                  disabled={!isCurrentStepComplete}
-                  onClick={() => setShowResetModal({show: true, full: false})}
-                  className={`px-8 py-3 rounded-xl text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg font-bold flex items-center gap-2 ${
-                    isCurrentStepComplete 
-                      ? 'bg-green-600 hover:bg-green-500 shadow-green-600/20' 
-                      : 'bg-gray-700 shadow-none'
-                  }`}
-                >
-                  <RotateCcw size={20} />
-                  <span>Save & Start Next Observer</span>
-                </button>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Export Modal / Password Protection */}
       <AnimatePresence>
@@ -850,11 +920,8 @@ export default function App() {
                   placeholder="Enter password..."
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && password === 'christie') {
-                      setIsUnlocked(true);
-                      setShowPasswordModal({show: false, target: 'results'});
-                      setCurrentPhase('results');
-                      setPassword('');
+                    if (e.key === 'Enter') {
+                      handlePasswordSuccess();
                     }
                   }}
                 />
@@ -870,16 +937,7 @@ export default function App() {
                     Cancel
                   </button>
                   <button 
-                    onClick={() => {
-                      if (password === 'christie') {
-                        setIsUnlocked(true);
-                        setShowPasswordModal({show: false, target: 'results'});
-                        setCurrentPhase('results');
-                        setPassword('');
-                      } else {
-                        alert('Incorrect password');
-                      }
-                    }}
+                    onClick={handlePasswordSuccess}
                     className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-colors"
                   >
                     Unlock
