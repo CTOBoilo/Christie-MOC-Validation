@@ -39,7 +39,6 @@ interface FrameData {
 
 interface SurveyState {
   observerId: string;
-  gender: string;
   age: string;
   startTime?: string;
   frames: FrameData[];
@@ -47,7 +46,6 @@ interface SurveyState {
 
 interface AggregatedResult {
   observerId: string;
-  gender: string;
   age: string;
   startTime?: string;
   frameResults: FrameData[];
@@ -95,7 +93,6 @@ export default function App() {
     
     return {
       observerId: `OBS-${String(counter || '1').padStart(3, '0')}`,
-      gender: '',
       age: '',
       startTime: undefined,
       frames: Array(TOTAL_FRAMES).fill(null).map(() => ({ ...JSON.parse(JSON.stringify(INITIAL_FRAME_DATA)) })),
@@ -133,7 +130,7 @@ export default function App() {
       : (currentPhase === 'baseline' ? 2 : 7) + currentFrameIndex;
 
     const isCurrentStepComplete = 
-      currentPhase === 'intro' ? (surveyData.gender !== '' && surveyData.age !== '') :
+      currentPhase === 'intro' ? (surveyData.age !== '') :
       currentPhase === 'thankyou' ? true :
       currentPhase === 'baseline' ? (currentFrame.baseline.matchAccuracy !== null) :
       (currentFrame.corrected.matchAccuracy !== null && (currentFrame.corrected.matchAccuracy === 'Perfect' || currentFrame.corrected.perceptualArtifacts !== null));
@@ -142,7 +139,6 @@ export default function App() {
 
     const newEntry: AggregatedResult = {
       observerId: surveyData.observerId,
-      gender: surveyData.gender,
       age: surveyData.age,
       startTime: surveyData.startTime,
       frameResults: surveyData.frames,
@@ -193,7 +189,6 @@ export default function App() {
       localStorage.setItem('observer_counter', '1');
       setSurveyData({
         observerId: 'OBS-001',
-        gender: '',
         age: '',
         startTime: undefined,
         frames: Array(TOTAL_FRAMES).fill(null).map(() => ({ ...JSON.parse(JSON.stringify(INITIAL_FRAME_DATA)) })),
@@ -208,7 +203,6 @@ export default function App() {
       
       setSurveyData({
         observerId: newId,
-        gender: '',
         age: '',
         startTime: undefined,
         frames: Array(TOTAL_FRAMES).fill(null).map(() => ({ ...JSON.parse(JSON.stringify(INITIAL_FRAME_DATA)) })),
@@ -226,16 +220,15 @@ export default function App() {
     // Add current session if it's not already in history and has data
     const currentInHistory = historyData.some(h => h.observerId === surveyData.observerId);
     const allData = [...historyData];
-    if (!currentInHistory && surveyData.gender) {
+    if (!currentInHistory && surveyData.age) {
       const isComplete = surveyData.frames.every(f => 
         f.baseline.matchAccuracy !== null && 
         f.corrected.matchAccuracy !== null && 
         f.corrected.perceptualArtifacts !== null
-      ) && surveyData.gender !== '' && surveyData.age !== '';
+      ) && surveyData.age !== '';
 
       allData.push({
         observerId: surveyData.observerId,
-        gender: surveyData.gender,
         age: surveyData.age,
         startTime: surveyData.startTime,
         frameResults: surveyData.frames,
@@ -252,7 +245,6 @@ export default function App() {
       'Observer ID',
       'Start Time',
       'Status',
-      'Gender',
       'Age',
       'Frame',
       'Baseline Match Accuracy',
@@ -269,7 +261,6 @@ export default function App() {
           session.observerId,
           session.startTime ? `"${new Date(session.startTime).toLocaleString()}"` : 'N/A',
           session.status || 'In Progress',
-          session.gender,
           session.age,
           index + 1,
           frame.baseline.matchAccuracy ?? 'N/A',
@@ -493,7 +484,6 @@ export default function App() {
                     <thead className="bg-[#1a1a1a] text-gray-400 uppercase text-[10px] tracking-widest font-mono">
                       <tr>
                         <th className="px-6 py-4">Observer</th>
-                        <th className="px-6 py-4">Gender</th>
                         <th className="px-6 py-4">Age</th>
                         <th className="px-6 py-4">Frames</th>
                         <th className="px-6 py-4">Status</th>
@@ -503,7 +493,7 @@ export default function App() {
                       {/* Show current session if in progress */}
                       {currentPhase !== 'results' && (() => {
                         const isCurrentStepComplete = 
-                          currentPhase === 'intro' ? (surveyData.gender !== '' && surveyData.age !== '') :
+                          currentPhase === 'intro' ? (surveyData.age !== '') :
                           currentPhase === 'baseline' ? (currentFrame.baseline.matchAccuracy !== null) :
                           (currentFrame.corrected.matchAccuracy !== null && currentFrame.corrected.perceptualArtifacts !== null);
                         
@@ -517,7 +507,6 @@ export default function App() {
                         return (
                           <tr className="bg-blue-600/5 border-l-4 border-blue-500">
                             <td className="px-6 py-4 font-mono text-blue-400">{surveyData.observerId}</td>
-                            <td className="px-6 py-4 text-gray-300">{surveyData.gender || '—'}</td>
                             <td className="px-6 py-4 text-gray-300">{surveyData.age || '—'}</td>
                             <td className="px-6 py-4 text-gray-300">
                               {surveyData.frames.filter(f => f.baseline.matchAccuracy !== null).length} / {TOTAL_FRAMES}
@@ -533,7 +522,7 @@ export default function App() {
 
                       {history.length === 0 && currentPhase === 'results' ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-12 text-center text-gray-600 italic">
+                          <td colSpan={4} className="px-6 py-12 text-center text-gray-600 italic">
                             No results found. Perform a survey or start a new tally.
                           </td>
                         </tr>
@@ -547,7 +536,6 @@ export default function App() {
                           return (
                             <tr key={res.observerId} className="hover:bg-gray-800/30 transition-colors">
                               <td className="px-6 py-4 font-mono text-blue-400">{res.observerId}</td>
-                              <td className="px-6 py-4 text-gray-300">{res.gender}</td>
                               <td className="px-6 py-4 text-gray-300">{res.age}</td>
                               <td className="px-6 py-4 text-gray-300">{res.frameResults.length}</td>
                               <td className="px-6 py-4">
@@ -590,26 +578,6 @@ export default function App() {
                 </div>
 
                 <div className="space-y-8">
-                  {/* Gender Selection */}
-                  <div className="space-y-4">
-                    <label className="block text-xs font-medium text-gray-400 uppercase tracking-widest text-center">Gender</label>
-                    <div className="flex gap-3">
-                      {['Biologically male', 'Biologically female', 'Neither / Prefer not to say'].map((g) => (
-                        <button
-                          key={g}
-                          onClick={() => setSurveyData(prev => ({ ...prev, gender: g }))}
-                          className={`flex-1 py-4 rounded-xl border-2 transition-all text-sm font-bold ${
-                            surveyData.gender === g
-                              ? 'bg-blue-600/20 border-blue-500 text-white'
-                              : 'bg-gray-800/50 border-transparent text-gray-500 hover:border-gray-700'
-                          }`}
-                        >
-                          {g}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Age Selection */}
                   <div className="space-y-4">
                     <label className="block text-xs font-medium text-gray-400 uppercase tracking-widest text-center">Age Range</label>
@@ -659,7 +627,7 @@ export default function App() {
               <section className="bg-[#2a2a2a] rounded-2xl p-5 shadow-xl border border-gray-800">
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold">A</div>
-                  <h2 className="text-base font-semibold text-white">Baseline (MOC OFF) — Frame {currentFrameIndex + 1}</h2>
+                  <h2 className="text-base font-semibold text-white">Phase 1 — Frame {currentFrameIndex + 1}</h2>
                 </div>
 
                 <div className="space-y-6">
@@ -745,7 +713,7 @@ export default function App() {
               <section className="bg-[#2a2a2a] rounded-2xl p-5 shadow-xl border border-gray-800">
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">B</div>
-                  <h2 className="text-base font-semibold text-white">Corrected (MOC ON) — Frame {currentFrameIndex + 1}</h2>
+                  <h2 className="text-base font-semibold text-white">Phase 2 — Frame {currentFrameIndex + 1}</h2>
                 </div>
 
                 <div className="space-y-6">
@@ -877,7 +845,7 @@ export default function App() {
               >
                 <span>
                   {currentPhase === 'intro' ? 'Start Survey' : 
-                   (currentPhase === 'baseline' && currentFrameIndex === TOTAL_FRAMES - 1 ? 'Start Corrected Phase' : 
+                   (currentPhase === 'baseline' && currentFrameIndex === TOTAL_FRAMES - 1 ? 'Start Phase 2' : 
                    (currentPhase === 'corrected' && currentFrameIndex === TOTAL_FRAMES - 1 ? 'Submit and Save' : 'Next Frame'))}
                 </span>
                 <ChevronRight size={20} />
